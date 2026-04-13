@@ -1,0 +1,36 @@
+{
+  "id": "95b666c9-caab-422e-bbdd-551a8a7f9ba6",
+  "name": "Workflow Template Builder",
+  "publisher": "Mohsin TMRC",
+  "version": "1.0.0.32",
+  "brief": "",
+  "description": "",
+  "privacyStatement": "",
+  "EULA": "",
+  "help": "",
+  "url": "",
+  "logo": "",
+  "dependencies": [],
+  "screenshots": [],
+  "platform": "1.0.0.0",
+  "application": "24.0.0.0",
+  "idRanges": [
+   {
+      "from": 80100,
+      "to": 80149
+    },
+    {
+      "from": 80200,
+      "to": 80299
+    }
+  ],
+  "resourceExposurePolicy": {
+    "allowDebugging": false,
+    "allowDownloadingSource": false,
+    "includeSourceInSymbolFile": false
+  },
+  "runtime": "16.0",
+  "features": [
+    "NoImplicitWith"
+  ]
+}

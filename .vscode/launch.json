@@ -1,0 +1,33 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        // {
+        //     "name": "Microsoft cloud Payroll",
+        //     "request": "launch",
+        //     "type": "al",
+        //     "environmentType": "Sandbox",
+        //     "environmentName": "Payroll",
+        //     "startupObjectId": 22,
+        //     "startupObjectType": "Page",
+        //     "breakOnError": "All",
+        //     "launchBrowser": true,
+        //     "enableLongRunningSqlStatements": true,
+        //     "enableSqlInformationDebugger": true,
+        //     "schemaUpdateMode": "ForceSync"
+        // },
+          {
+            "name": "Payroll-Mohsin",
+            "request": "launch",
+            "type": "al",
+            "environmentType": "Sandbox",
+            "environmentName": "Payroll-Mohsin",
+            "startupObjectId": 22,
+            "startupObjectType": "Page",
+            "breakOnError": "All",
+            "launchBrowser": true,
+            "enableLongRunningSqlStatements": true,
+            "enableSqlInformationDebugger": true,
+            "schemaUpdateMode": "ForceSync"
+        }   
+    ]
+}

@@ -1,0 +1,28 @@
+name: Publish AL Extension
+
+on:
+  workflow_dispatch:
+    inputs:
+      setup_no:
+        description: 'Setup Number'
+        required: true
+      generated_file_name:
+        description: 'Generated File Name'
+        required: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Log Workflow Inputs
+        run: |
+          echo "Setup No: ${{ github.event.inputs.setup_no }}"
+          echo "Generated File: ${{ github.event.inputs.generated_file_name }}"
+          echo "Workflow triggered at: $(date)"
+      
+      - name: Deploy AL Code
+        run: |
+          echo "? Ready to deploy ${{ github.event.inputs.generated_file_name }}"
+          echo "Setup: ${{ github.event.inputs.setup_no }}"
