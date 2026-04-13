@@ -144,6 +144,7 @@ codeunit 80147 "WF Deploy Scheduler Mgt"
     begin
         Inputs.Add('setup_no', SetupNo);
         Inputs.Add('generated_file_name', GeneratedFileName);
+        Inputs.Add('publish_to_bc', 'yes');
         Root.Add('ref', BranchName);
         Root.Add('inputs', Inputs);
         Root.WriteTo(BodyTxt);

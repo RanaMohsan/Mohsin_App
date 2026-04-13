@@ -9,20 +9,68 @@ on:
       generated_file_name:
         description: 'Generated File Name'
         required: true
+      publish_to_bc:
+        description: 'Publish built app to Business Central environment'
+        required: false
+        default: 'no'
 
 jobs:
-  publish:
+  build:
+    name: Build AL App
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
-      
-      - name: Log Workflow Inputs
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '7.0.x'
+
+      - name: Install AL Compiler
+        run: |
+          dotnet tool install --global Microsoft.Dynamics.Nav.CodeAnalysis
+          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+      - name: Log workflow inputs
         run: |
           echo "Setup No: ${{ github.event.inputs.setup_no }}"
           echo "Generated File: ${{ github.event.inputs.generated_file_name }}"
-          echo "Workflow triggered at: $(date)"
-      
-      - name: Deploy AL Code
+          echo "Publish to BC: ${{ github.event.inputs.publish_to_bc }}"
+
+      - name: Build AL package
         run: |
-          echo "? Ready to deploy ${{ github.event.inputs.generated_file_name }}"
-          echo "Setup: ${{ github.event.inputs.setup_no }}"
+          mkdir -p output
+          alc /project:. /packagecachepath:.alpackages /out:./output/${{ github.event.inputs.generated_file_name }}.app
+
+      - name: Upload built app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bc-al-app
+          path: output/*.app
+
+  publish:
+    name: Publish to Business Central
+    needs: build
+    if: ${{ github.event.inputs.publish_to_bc == 'yes' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download built app
+        uses: actions/download-artifact@v4
+        with:
+          name: bc-al-app
+          path: output
+
+      - name: Publish to Business Central (placeholder)
+        env:
+          BC_ENVIRONMENT_URL: ${{ secrets.BC_ENVIRONMENT_URL }}
+          BC_TENANT_ID: ${{ secrets.BC_TENANT_ID }}
+          BC_CLIENT_ID: ${{ secrets.BC_CLIENT_ID }}
+          BC_CLIENT_SECRET: ${{ secrets.BC_CLIENT_SECRET }}
+        run: |
+          echo "Built app:"
+          ls -la output
+          echo "Publish step is configured, but you must add your Business Central publish logic here."
+          echo "Use BC environment details in secrets to call your publish API or CLI."
