@@ -21,6 +21,9 @@ on:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   package:
     name: Resolve App Package
@@ -108,13 +111,28 @@ jobs:
           BC_CLIENT_ID: ${{ secrets.BC_CLIENT_ID }}
           BC_CLIENT_SECRET: ${{ secrets.BC_CLIENT_SECRET }}
           BC_ENVIRONMENT_NAME: ${{ secrets.BC_ENVIRONMENT_NAME }}
+          BC_ENVIRONMENT_URL: ${{ secrets.BC_ENVIRONMENT_URL }}
         run: |
           $ErrorActionPreference = 'Stop'
 
           if ([string]::IsNullOrWhiteSpace($env:BC_TENANT_ID)) { throw 'Missing secret BC_TENANT_ID' }
           if ([string]::IsNullOrWhiteSpace($env:BC_CLIENT_ID)) { throw 'Missing secret BC_CLIENT_ID' }
           if ([string]::IsNullOrWhiteSpace($env:BC_CLIENT_SECRET)) { throw 'Missing secret BC_CLIENT_SECRET' }
-          if ([string]::IsNullOrWhiteSpace($env:BC_ENVIRONMENT_NAME)) { throw 'Missing secret BC_ENVIRONMENT_NAME' }
+          $environmentName = $env:BC_ENVIRONMENT_NAME
+          if ([string]::IsNullOrWhiteSpace($environmentName) -and -not [string]::IsNullOrWhiteSpace($env:BC_ENVIRONMENT_URL)) {
+            try {
+              $uri = [System.Uri]$env:BC_ENVIRONMENT_URL
+              $parts = $uri.AbsolutePath.Trim('/') -split '/'
+              if ($parts.Length -gt 0) {
+                $environmentName = $parts[$parts.Length - 1]
+              }
+            } catch {
+            }
+          }
+
+          if ([string]::IsNullOrWhiteSpace($environmentName)) {
+            throw 'Missing environment configuration. Set BC_ENVIRONMENT_NAME (preferred) or BC_ENVIRONMENT_URL.'
+          }
 
           $appPath = Join-Path $env:GITHUB_WORKSPACE 'output\app-to-publish.app'
           if (-not (Test-Path $appPath)) { throw "App artifact not found at $appPath" }
@@ -136,7 +154,7 @@ jobs:
           $publishCommand = Get-Command Publish-PerTenantExtensionApps -ErrorAction Stop
           $publishParams = @{}
           if ($publishCommand.Parameters.ContainsKey('bcAuthContext')) { $publishParams['bcAuthContext'] = $bcAuthContext }
-          if ($publishCommand.Parameters.ContainsKey('environment')) { $publishParams['environment'] = $env:BC_ENVIRONMENT_NAME }
+          if ($publishCommand.Parameters.ContainsKey('environment')) { $publishParams['environment'] = $environmentName }
           if ($publishCommand.Parameters.ContainsKey('appFiles')) { $publishParams['appFiles'] = @($appPath) }
           if ($publishCommand.Parameters.ContainsKey('scope')) { $publishParams['scope'] = 'Tenant' }
           if ($publishCommand.Parameters.ContainsKey('sync')) { $publishParams['sync'] = $true }
@@ -145,4 +163,4 @@ jobs:
           if ($publishCommand.Parameters.ContainsKey('tenant')) { $publishParams['tenant'] = 'default' }
 
           Publish-PerTenantExtensionApps @publishParams
-          Write-Host "Publish completed for environment '$($env:BC_ENVIRONMENT_NAME)'."
+          Write-Host "Publish completed for environment '$environmentName'."
