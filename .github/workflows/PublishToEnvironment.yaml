@@ -121,9 +121,20 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
           Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-          Install-Module BcContainerHelper -Scope CurrentUser -Force -AllowClobber
+
+          try {
+            Install-Module BcContainerHelper -Scope CurrentUser -Force -AllowClobber -Repository PSGallery
+          }
+          catch {
+            if (Get-Command Install-PSResource -ErrorAction SilentlyContinue) {
+              Install-PSResource BcContainerHelper -Scope CurrentUser -TrustRepository -Reinstall -Quiet
+            }
+            else {
+              throw
+            }
+          }
+
           Import-Module BcContainerHelper -Force
           Write-Host 'BcContainerHelper installed.'
 
