@@ -60,14 +60,37 @@ jobs:
           }
 
           if ($resolved -eq '') {
-            $apps = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Filter *.app |
+            $searchPaths = @(
+              $env:GITHUB_WORKSPACE,
+              (Join-Path $env:GITHUB_WORKSPACE 'output'),
+              (Join-Path $env:GITHUB_WORKSPACE 'release'),
+              (Join-Path $env:GITHUB_WORKSPACE 'artifacts')
+            )
+
+            $apps = @()
+            foreach ($path in $searchPaths) {
+              if (Test-Path $path) {
+                $apps += Get-ChildItem -Path (Join-Path $path '*.app') -File -ErrorAction SilentlyContinue
+              }
+            }
+
+            if (-not $apps -or $apps.Count -eq 0) {
+              $apps = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Filter *.app -File -ErrorAction SilentlyContinue |
+                Where-Object { $_.FullName -notmatch '\\.alpackages\\' }
+            }
+
+            $apps = $apps |
               Where-Object { $_.FullName -notmatch '\\.alpackages\\' } |
               Sort-Object LastWriteTimeUtc -Descending
 
             if (-not $apps -or $apps.Count -eq 0) {
+              Write-Host 'No candidate .app files detected. Repository root files:'
+              Get-ChildItem -Path $env:GITHUB_WORKSPACE -File -ErrorAction SilentlyContinue | Select-Object Name,Length | Format-Table -AutoSize | Out-String | Write-Host
               throw 'No .app file found in repository. Add an .app file or pass workflow input app_file.'
             }
 
+            Write-Host 'Candidate app files:'
+            $apps | Select-Object FullName,Length,LastWriteTimeUtc | Format-Table -AutoSize | Out-String | Write-Host
             $resolved = $apps[0].FullName
           }
 
