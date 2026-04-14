@@ -142,17 +142,45 @@ jobs:
         shell: pwsh
         env:
           BC_TENANT_ID: ${{ secrets.BC_TENANT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           BC_CLIENT_ID: ${{ secrets.BC_CLIENT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           BC_CLIENT_SECRET: ${{ secrets.BC_CLIENT_SECRET }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           BC_ENVIRONMENT_NAME: ${{ secrets.BC_ENVIRONMENT_NAME }}
+          BC_ENVIRONMENT: ${{ secrets.BC_ENVIRONMENT }}
           BC_ENVIRONMENT_URL: ${{ secrets.BC_ENVIRONMENT_URL }}
         run: |
           $ErrorActionPreference = 'Stop'
 
-          if ([string]::IsNullOrWhiteSpace($env:BC_TENANT_ID)) { throw 'Missing secret BC_TENANT_ID' }
-          if ([string]::IsNullOrWhiteSpace($env:BC_CLIENT_ID)) { throw 'Missing secret BC_CLIENT_ID' }
-          if ([string]::IsNullOrWhiteSpace($env:BC_CLIENT_SECRET)) { throw 'Missing secret BC_CLIENT_SECRET' }
-          $environmentName = $env:BC_ENVIRONMENT_NAME
+          function FirstNonEmpty([string[]]$values) {
+            foreach ($v in $values) {
+              if (-not [string]::IsNullOrWhiteSpace($v)) {
+                return $v
+              }
+            }
+            return ''
+          }
+
+          function Add-FirstAvailableParam([hashtable]$target, $command, [string[]]$names, $value) {
+            foreach ($name in $names) {
+              if ($command.Parameters.ContainsKey($name)) {
+                $target[$name] = $value
+                return $true
+              }
+            }
+            return $false
+          }
+
+          $tenantId = FirstNonEmpty @($env:BC_TENANT_ID, $env:AZURE_TENANT_ID)
+          $clientId = FirstNonEmpty @($env:BC_CLIENT_ID, $env:AZURE_CLIENT_ID)
+          $clientSecret = FirstNonEmpty @($env:BC_CLIENT_SECRET, $env:AZURE_CLIENT_SECRET)
+
+          if ([string]::IsNullOrWhiteSpace($tenantId)) { throw 'Missing tenant secret. Set BC_TENANT_ID or AZURE_TENANT_ID.' }
+          if ([string]::IsNullOrWhiteSpace($clientId)) { throw 'Missing client-id secret. Set BC_CLIENT_ID or AZURE_CLIENT_ID.' }
+          if ([string]::IsNullOrWhiteSpace($clientSecret)) { throw 'Missing client-secret secret. Set BC_CLIENT_SECRET or AZURE_CLIENT_SECRET.' }
+
+          $environmentName = FirstNonEmpty @($env:BC_ENVIRONMENT_NAME, $env:BC_ENVIRONMENT)
           if ([string]::IsNullOrWhiteSpace($environmentName) -and -not [string]::IsNullOrWhiteSpace($env:BC_ENVIRONMENT_URL)) {
             try {
               $uri = [System.Uri]$env:BC_ENVIRONMENT_URL
@@ -173,28 +201,46 @@ jobs:
 
           Import-Module BcContainerHelper -Force
 
-          $authCommand = Get-Command New-BcAuthContext -ErrorAction Stop
-          $authParams = @{}
-          if ($authCommand.Parameters.ContainsKey('tenantID')) { $authParams['tenantID'] = $env:BC_TENANT_ID }
-          if ($authCommand.Parameters.ContainsKey('tenantId')) { $authParams['tenantId'] = $env:BC_TENANT_ID }
-          if ($authCommand.Parameters.ContainsKey('clientID')) { $authParams['clientID'] = $env:BC_CLIENT_ID }
-          if ($authCommand.Parameters.ContainsKey('clientId')) { $authParams['clientId'] = $env:BC_CLIENT_ID }
-          if ($authCommand.Parameters.ContainsKey('clientSecret')) { $authParams['clientSecret'] = $env:BC_CLIENT_SECRET }
-          if ($authCommand.Parameters.ContainsKey('scopes')) { $authParams['scopes'] = 'https://api.businesscentral.dynamics.com/.default' }
-          if ($authCommand.Parameters.ContainsKey('scope')) { $authParams['scope'] = 'https://api.businesscentral.dynamics.com/.default' }
+          try {
+            $authCommand = Get-Command New-BcAuthContext -ErrorAction Stop
+            $authParams = @{}
+            Add-FirstAvailableParam $authParams $authCommand @('tenantID','tenantId') $tenantId | Out-Null
+            Add-FirstAvailableParam $authParams $authCommand @('clientID','clientId') $clientId | Out-Null
+            Add-FirstAvailableParam $authParams $authCommand @('clientSecret') $clientSecret | Out-Null
+            Add-FirstAvailableParam $authParams $authCommand @('scopes','scope') 'https://api.businesscentral.dynamics.com/.default' | Out-Null
 
-          $bcAuthContext = New-BcAuthContext @authParams
+            Write-Host 'Creating BC auth context...'
+            $bcAuthContext = New-BcAuthContext @authParams
 
-          $publishCommand = Get-Command Publish-PerTenantExtensionApps -ErrorAction Stop
-          $publishParams = @{}
-          if ($publishCommand.Parameters.ContainsKey('bcAuthContext')) { $publishParams['bcAuthContext'] = $bcAuthContext }
-          if ($publishCommand.Parameters.ContainsKey('environment')) { $publishParams['environment'] = $environmentName }
-          if ($publishCommand.Parameters.ContainsKey('appFiles')) { $publishParams['appFiles'] = @($appPath) }
-          if ($publishCommand.Parameters.ContainsKey('scope')) { $publishParams['scope'] = 'Tenant' }
-          if ($publishCommand.Parameters.ContainsKey('sync')) { $publishParams['sync'] = $true }
-          if ($publishCommand.Parameters.ContainsKey('install')) { $publishParams['install'] = $true }
-          if ($publishCommand.Parameters.ContainsKey('schemaSyncMode')) { $publishParams['schemaSyncMode'] = 'Add' }
-          if ($publishCommand.Parameters.ContainsKey('tenant')) { $publishParams['tenant'] = 'default' }
+            $publishCommand = Get-Command Publish-PerTenantExtensionApps -ErrorAction SilentlyContinue
+            if (-not $publishCommand) {
+              $publishCommand = Get-Command Publish-PerTenantExtensionApp -ErrorAction Stop
+            }
 
-          Publish-PerTenantExtensionApps @publishParams
-          Write-Host "Publish completed for environment '$environmentName'."
+            $publishParams = @{}
+            Add-FirstAvailableParam $publishParams $publishCommand @('bcAuthContext','authContext') $bcAuthContext | Out-Null
+            Add-FirstAvailableParam $publishParams $publishCommand @('environment','environmentName') $environmentName | Out-Null
+
+            if (-not (Add-FirstAvailableParam $publishParams $publishCommand @('appFiles') @($appPath))) {
+              Add-FirstAvailableParam $publishParams $publishCommand @('appFile') $appPath | Out-Null
+            }
+
+            Add-FirstAvailableParam $publishParams $publishCommand @('scope') 'Tenant' | Out-Null
+            Add-FirstAvailableParam $publishParams $publishCommand @('sync') $true | Out-Null
+            Add-FirstAvailableParam $publishParams $publishCommand @('install') $true | Out-Null
+            Add-FirstAvailableParam $publishParams $publishCommand @('schemaSyncMode') 'Add' | Out-Null
+            Add-FirstAvailableParam $publishParams $publishCommand @('tenant') 'default' | Out-Null
+
+            Write-Host "Using publish command: $($publishCommand.Name)"
+            Write-Host "Target environment: $environmentName"
+            & $publishCommand @publishParams
+            Write-Host "Publish completed for environment '$environmentName'."
+          }
+          catch {
+            Write-Host 'BC publish step failed with detailed error:'
+            $_ | Format-List * -Force | Out-String | Write-Host
+            if ($_.Exception -and $_.Exception.InnerException) {
+              $_.Exception.InnerException | Format-List * -Force | Out-String | Write-Host
+            }
+            throw
+          }
