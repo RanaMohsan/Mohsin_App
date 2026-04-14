@@ -7,70 +7,142 @@ on:
         description: 'Setup Number'
         required: true
       generated_file_name:
-        description: 'Generated File Name'
+        description: 'Generated file name from BC (informational)'
         required: true
       publish_to_bc:
-        description: 'Publish built app to Business Central environment'
+        description: 'Publish to Business Central SaaS'
         required: false
-        default: 'no'
+        default: 'yes'
+      app_file:
+        description: 'Optional relative path to .app file (for example output/MyApp.app)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
 
 jobs:
-  build:
-    name: Build AL App
-    runs-on: ubuntu-latest
+  package:
+    name: Resolve App Package
+    runs-on: windows-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: '7.0.x'
-
-      - name: Install AL Compiler
-        run: |
-          dotnet tool install --global Microsoft.Dynamics.Nav.CodeAnalysis
-          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+        uses: actions/checkout@v4
 
       - name: Log workflow inputs
+        shell: pwsh
         run: |
-          echo "Setup No: ${{ github.event.inputs.setup_no }}"
-          echo "Generated File: ${{ github.event.inputs.generated_file_name }}"
-          echo "Publish to BC: ${{ github.event.inputs.publish_to_bc }}"
+          Write-Host "Setup No: ${{ github.event.inputs.setup_no }}"
+          Write-Host "Generated File: ${{ github.event.inputs.generated_file_name }}"
+          Write-Host "Publish to BC: ${{ github.event.inputs.publish_to_bc }}"
+          Write-Host "App file input: ${{ github.event.inputs.app_file }}"
 
-      - name: Build AL package
+      - name: Resolve app package path
+        id: resolve
+        shell: pwsh
         run: |
-          mkdir -p output
-          alc /project:. /packagecachepath:.alpackages /out:./output/${{ github.event.inputs.generated_file_name }}.app
+          $ErrorActionPreference = 'Stop'
 
-      - name: Upload built app artifact
+          $inputApp = '${{ github.event.inputs.app_file }}'
+          $resolved = ''
+
+          if ($inputApp -ne '') {
+            $candidate = Join-Path $env:GITHUB_WORKSPACE $inputApp
+            if (Test-Path $candidate) {
+              $resolved = (Resolve-Path $candidate).Path
+            } else {
+              throw "Configured app_file '$inputApp' was not found in repository."
+            }
+          }
+
+          if ($resolved -eq '') {
+            $apps = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Filter *.app |
+              Where-Object { $_.FullName -notmatch '\\.alpackages\\' } |
+              Sort-Object LastWriteTimeUtc -Descending
+
+            if (-not $apps -or $apps.Count -eq 0) {
+              throw 'No .app file found in repository. Add an .app file or pass workflow input app_file.'
+            }
+
+            $resolved = $apps[0].FullName
+          }
+
+          New-Item -ItemType Directory -Path "$env:GITHUB_WORKSPACE\output" -Force | Out-Null
+          Copy-Item -Path $resolved -Destination "$env:GITHUB_WORKSPACE\output\app-to-publish.app" -Force
+          Write-Host "Selected app package: $resolved"
+
+      - name: Upload app artifact
         uses: actions/upload-artifact@v4
         with:
           name: bc-al-app
-          path: output/*.app
+          path: output/app-to-publish.app
 
   publish:
-    name: Publish to Business Central
-    needs: build
+    name: Publish to Business Central SaaS
+    needs: package
     if: ${{ github.event.inputs.publish_to_bc == 'yes' }}
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
-      - name: Download built app
+      - name: Download app artifact
         uses: actions/download-artifact@v4
         with:
           name: bc-al-app
           path: output
 
-      - name: Publish to Business Central (placeholder)
+      - name: Install BcContainerHelper
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module BcContainerHelper -Scope CurrentUser -Force -AllowClobber
+          Import-Module BcContainerHelper -Force
+          Write-Host 'BcContainerHelper installed.'
+
+      - name: Publish app to BC SaaS
+        shell: pwsh
         env:
-          BC_ENVIRONMENT_URL: ${{ secrets.BC_ENVIRONMENT_URL }}
           BC_TENANT_ID: ${{ secrets.BC_TENANT_ID }}
           BC_CLIENT_ID: ${{ secrets.BC_CLIENT_ID }}
           BC_CLIENT_SECRET: ${{ secrets.BC_CLIENT_SECRET }}
+          BC_ENVIRONMENT_NAME: ${{ secrets.BC_ENVIRONMENT_NAME }}
         run: |
-          echo "Built app:"
-          ls -la output
-          echo "Publish step is configured, but you must add your Business Central publish logic here."
-          echo "Use BC environment details in secrets to call your publish API or CLI."
+          $ErrorActionPreference = 'Stop'
+
+          if ([string]::IsNullOrWhiteSpace($env:BC_TENANT_ID)) { throw 'Missing secret BC_TENANT_ID' }
+          if ([string]::IsNullOrWhiteSpace($env:BC_CLIENT_ID)) { throw 'Missing secret BC_CLIENT_ID' }
+          if ([string]::IsNullOrWhiteSpace($env:BC_CLIENT_SECRET)) { throw 'Missing secret BC_CLIENT_SECRET' }
+          if ([string]::IsNullOrWhiteSpace($env:BC_ENVIRONMENT_NAME)) { throw 'Missing secret BC_ENVIRONMENT_NAME' }
+
+          $appPath = Join-Path $env:GITHUB_WORKSPACE 'output\app-to-publish.app'
+          if (-not (Test-Path $appPath)) { throw "App artifact not found at $appPath" }
+
+          Import-Module BcContainerHelper -Force
+
+          $authCommand = Get-Command New-BcAuthContext -ErrorAction Stop
+          $authParams = @{}
+          if ($authCommand.Parameters.ContainsKey('tenantID')) { $authParams['tenantID'] = $env:BC_TENANT_ID }
+          if ($authCommand.Parameters.ContainsKey('tenantId')) { $authParams['tenantId'] = $env:BC_TENANT_ID }
+          if ($authCommand.Parameters.ContainsKey('clientID')) { $authParams['clientID'] = $env:BC_CLIENT_ID }
+          if ($authCommand.Parameters.ContainsKey('clientId')) { $authParams['clientId'] = $env:BC_CLIENT_ID }
+          if ($authCommand.Parameters.ContainsKey('clientSecret')) { $authParams['clientSecret'] = $env:BC_CLIENT_SECRET }
+          if ($authCommand.Parameters.ContainsKey('scopes')) { $authParams['scopes'] = 'https://api.businesscentral.dynamics.com/.default' }
+          if ($authCommand.Parameters.ContainsKey('scope')) { $authParams['scope'] = 'https://api.businesscentral.dynamics.com/.default' }
+
+          $bcAuthContext = New-BcAuthContext @authParams
+
+          $publishCommand = Get-Command Publish-PerTenantExtensionApps -ErrorAction Stop
+          $publishParams = @{}
+          if ($publishCommand.Parameters.ContainsKey('bcAuthContext')) { $publishParams['bcAuthContext'] = $bcAuthContext }
+          if ($publishCommand.Parameters.ContainsKey('environment')) { $publishParams['environment'] = $env:BC_ENVIRONMENT_NAME }
+          if ($publishCommand.Parameters.ContainsKey('appFiles')) { $publishParams['appFiles'] = @($appPath) }
+          if ($publishCommand.Parameters.ContainsKey('scope')) { $publishParams['scope'] = 'Tenant' }
+          if ($publishCommand.Parameters.ContainsKey('sync')) { $publishParams['sync'] = $true }
+          if ($publishCommand.Parameters.ContainsKey('install')) { $publishParams['install'] = $true }
+          if ($publishCommand.Parameters.ContainsKey('schemaSyncMode')) { $publishParams['schemaSyncMode'] = 'Add' }
+          if ($publishCommand.Parameters.ContainsKey('tenant')) { $publishParams['tenant'] = 'default' }
+
+          Publish-PerTenantExtensionApps @publishParams
+          Write-Host "Publish completed for environment '$($env:BC_ENVIRONMENT_NAME)'."
