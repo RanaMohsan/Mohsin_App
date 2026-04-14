@@ -3,46 +3,25 @@ name: Publish AL Extension
 on:
   workflow_dispatch:
     inputs:
-      setup_no:
-        description: 'Setup Number'
-        required: true
-      generated_file_name:
-        description: 'Generated file name from BC (informational)'
-        required: true
       publish_to_bc:
         description: 'Publish to Business Central SaaS'
         required: false
         default: 'yes'
       app_file:
-        description: 'Optional relative path to .app file (for example output/MyApp.app)'
+        description: 'Optional path to .app file (example: output/app.app)'
         required: false
         default: ''
 
-permissions:
-  contents: read
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   package:
-    name: Resolve App Package
+    name: Get App File
     runs-on: windows-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Log workflow inputs
-        shell: pwsh
-        run: |
-          Write-Host "Setup No: ${{ github.event.inputs.setup_no }}"
-          Write-Host "Generated File: ${{ github.event.inputs.generated_file_name }}"
-          Write-Host "Publish to BC: ${{ github.event.inputs.publish_to_bc }}"
-          Write-Host "App file input: ${{ github.event.inputs.app_file }}"
-
-      - name: Resolve app package path
-        id: resolve
+      - name: Find .app file
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -51,196 +30,113 @@ jobs:
           $resolved = ''
 
           if ($inputApp -ne '') {
-            $candidate = Join-Path $env:GITHUB_WORKSPACE $inputApp
-            if (Test-Path $candidate) {
-              $resolved = (Resolve-Path $candidate).Path
+            $path = Join-Path $env:GITHUB_WORKSPACE $inputApp
+            if (Test-Path $path) {
+              $resolved = $path
             } else {
-              throw "Configured app_file '$inputApp' was not found in repository."
+              throw 'Provided app_file not found'
             }
           }
 
           if ($resolved -eq '') {
-            $searchPaths = @(
-              $env:GITHUB_WORKSPACE,
-              (Join-Path $env:GITHUB_WORKSPACE 'output'),
-              (Join-Path $env:GITHUB_WORKSPACE 'release'),
-              (Join-Path $env:GITHUB_WORKSPACE 'artifacts')
-            )
-
-            $apps = @()
-            foreach ($path in $searchPaths) {
-              if (Test-Path $path) {
-                $apps += Get-ChildItem -Path (Join-Path $path '*.app') -File -ErrorAction SilentlyContinue
-              }
-            }
-
-            if (-not $apps -or $apps.Count -eq 0) {
-              $apps = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Filter *.app -File -ErrorAction SilentlyContinue |
-                Where-Object { $_.FullName -notmatch '\\.alpackages\\' }
-            }
-
-            $apps = $apps |
+            $apps = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Filter *.app -File |
               Where-Object { $_.FullName -notmatch '\\.alpackages\\' } |
               Sort-Object LastWriteTimeUtc -Descending
 
-            if (-not $apps -or $apps.Count -eq 0) {
-              Write-Host 'No candidate .app files detected. Repository root files:'
-              Get-ChildItem -Path $env:GITHUB_WORKSPACE -File -ErrorAction SilentlyContinue | Select-Object Name,Length | Format-Table -AutoSize | Out-String | Write-Host
-              throw 'No .app file found in repository. Add an .app file or pass workflow input app_file.'
+            if (!$apps) {
+              throw 'No .app file found in repo'
             }
 
-            Write-Host 'Candidate app files:'
-            $apps | Select-Object FullName,Length,LastWriteTimeUtc | Format-Table -AutoSize | Out-String | Write-Host
             $resolved = $apps[0].FullName
           }
 
           New-Item -ItemType Directory -Path "$env:GITHUB_WORKSPACE\output" -Force | Out-Null
-          Copy-Item -Path $resolved -Destination "$env:GITHUB_WORKSPACE\output\app-to-publish.app" -Force
-          Write-Host "Selected app package: $resolved"
+          Copy-Item $resolved "$env:GITHUB_WORKSPACE\output\app.app" -Force
 
-      - name: Upload app artifact
+          Write-Host "Using App File: $resolved"
+
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bc-al-app
-          path: output/app-to-publish.app
+          name: bc-app
+          path: output/app.app
 
   publish:
-    name: Publish to Business Central SaaS
+    name: Publish to BC SaaS
     needs: package
     if: ${{ github.event.inputs.publish_to_bc == 'yes' }}
     runs-on: windows-latest
 
     steps:
-      - name: Download app artifact
+      - name: Download Artifact
         uses: actions/download-artifact@v4
         with:
-          name: bc-al-app
+          name: bc-app
           path: output
 
       - name: Install BcContainerHelper
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module BcContainerHelper -Scope CurrentUser -Force -AllowClobber
+          Import-Module BcContainerHelper
 
-          try {
-            Install-Module BcContainerHelper -Scope CurrentUser -Force -AllowClobber -Repository PSGallery
-          }
-          catch {
-            if (Get-Command Install-PSResource -ErrorAction SilentlyContinue) {
-              Install-PSResource BcContainerHelper -Scope CurrentUser -TrustRepository -Reinstall -Quiet
-            }
-            else {
-              throw
-            }
-          }
-
-          Import-Module BcContainerHelper -Force
-          Write-Host 'BcContainerHelper installed.'
-
-      - name: Publish app to BC SaaS
+      - name: DEBUG (Check Secrets)
         shell: pwsh
         env:
-          BC_TENANT_ID: ${{ secrets.BC_TENANT_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          BC_CLIENT_ID: ${{ secrets.BC_CLIENT_ID }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          BC_CLIENT_SECRET: ${{ secrets.BC_CLIENT_SECRET }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          BC_ENVIRONMENT_NAME: ${{ secrets.BC_ENVIRONMENT_NAME }}
-          BC_ENVIRONMENT: ${{ secrets.BC_ENVIRONMENT }}
-          BC_ENVIRONMENT_URL: ${{ secrets.BC_ENVIRONMENT_URL }}
+          TENANT_ID: ${{ secrets.BC_TENANT_ID }}
+          CLIENT_ID: ${{ secrets.BC_CLIENT_ID }}
+          ENVIRONMENT: ${{ secrets.BC_ENVIRONMENT_NAME }}
+        run: |
+          Write-Host "TENANT_ID: $env:TENANT_ID"
+          Write-Host "CLIENT_ID: $env:CLIENT_ID"
+          Write-Host "ENVIRONMENT: $env:ENVIRONMENT"
+
+      - name: Publish App
+        shell: pwsh
+        env:
+          TENANT_ID: ${{ secrets.BC_TENANT_ID }}
+          CLIENT_ID: ${{ secrets.BC_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.BC_CLIENT_SECRET }}
+          ENVIRONMENT: ${{ secrets.BC_ENVIRONMENT_NAME }}
         run: |
           $ErrorActionPreference = 'Stop'
 
-          function FirstNonEmpty([string[]]$values) {
-            foreach ($v in $values) {
-              if (-not [string]::IsNullOrWhiteSpace($v)) {
-                return $v
-              }
-            }
-            return ''
+          # VALIDATION
+          if (-not $env:TENANT_ID) { throw 'TENANT_ID missing' }
+          if (-not $env:CLIENT_ID) { throw 'CLIENT_ID missing' }
+          if (-not $env:CLIENT_SECRET) { throw 'CLIENT_SECRET missing' }
+          if (-not $env:ENVIRONMENT) { throw 'ENVIRONMENT missing' }
+
+          $appFile = Join-Path $env:GITHUB_WORKSPACE "output\app.app"
+
+          if (!(Test-Path $appFile)) {
+            throw 'App file not found!'
           }
-
-          function Add-FirstAvailableParam([hashtable]$target, $command, [string[]]$names, $value) {
-            foreach ($name in $names) {
-              if ($command.Parameters.ContainsKey($name)) {
-                $target[$name] = $value
-                return $true
-              }
-            }
-            return $false
-          }
-
-          $tenantId = FirstNonEmpty @($env:BC_TENANT_ID, $env:AZURE_TENANT_ID)
-          $clientId = FirstNonEmpty @($env:BC_CLIENT_ID, $env:AZURE_CLIENT_ID)
-          $clientSecret = FirstNonEmpty @($env:BC_CLIENT_SECRET, $env:AZURE_CLIENT_SECRET)
-
-          if ([string]::IsNullOrWhiteSpace($tenantId)) { throw 'Missing tenant secret. Set BC_TENANT_ID or AZURE_TENANT_ID.' }
-          if ([string]::IsNullOrWhiteSpace($clientId)) { throw 'Missing client-id secret. Set BC_CLIENT_ID or AZURE_CLIENT_ID.' }
-          if ([string]::IsNullOrWhiteSpace($clientSecret)) { throw 'Missing client-secret secret. Set BC_CLIENT_SECRET or AZURE_CLIENT_SECRET.' }
-
-          $environmentName = FirstNonEmpty @($env:BC_ENVIRONMENT_NAME, $env:BC_ENVIRONMENT)
-          if ([string]::IsNullOrWhiteSpace($environmentName) -and -not [string]::IsNullOrWhiteSpace($env:BC_ENVIRONMENT_URL)) {
-            try {
-              $uri = [System.Uri]$env:BC_ENVIRONMENT_URL
-              $parts = $uri.AbsolutePath.Trim('/') -split '/'
-              if ($parts.Length -gt 0) {
-                $environmentName = $parts[$parts.Length - 1]
-              }
-            } catch {
-            }
-          }
-
-          if ([string]::IsNullOrWhiteSpace($environmentName)) {
-            throw 'Missing environment configuration. Set BC_ENVIRONMENT_NAME (preferred) or BC_ENVIRONMENT_URL.'
-          }
-
-          $appPath = Join-Path $env:GITHUB_WORKSPACE 'output\app-to-publish.app'
-          if (-not (Test-Path $appPath)) { throw "App artifact not found at $appPath" }
-
-          Import-Module BcContainerHelper -Force
 
           try {
-            $authCommand = Get-Command New-BcAuthContext -ErrorAction Stop
-            $authParams = @{}
-            Add-FirstAvailableParam $authParams $authCommand @('tenantID','tenantId') $tenantId | Out-Null
-            Add-FirstAvailableParam $authParams $authCommand @('clientID','clientId') $clientId | Out-Null
-            Add-FirstAvailableParam $authParams $authCommand @('clientSecret') $clientSecret | Out-Null
-            Add-FirstAvailableParam $authParams $authCommand @('scopes','scope') 'https://api.businesscentral.dynamics.com/.default' | Out-Null
+              Write-Host 'Authenticating...'
 
-            Write-Host 'Creating BC auth context...'
-            $bcAuthContext = New-BcAuthContext @authParams
+              $authContext = New-BcAuthContext `
+                -tenantId $env:TENANT_ID `
+                -clientId $env:CLIENT_ID `
+                -clientSecret $env:CLIENT_SECRET `
+                -scope "https://api.businesscentral.dynamics.com/.default"
 
-            $publishCommand = Get-Command Publish-PerTenantExtensionApps -ErrorAction SilentlyContinue
-            if (-not $publishCommand) {
-              $publishCommand = Get-Command Publish-PerTenantExtensionApp -ErrorAction Stop
-            }
+              Write-Host 'Publishing App...'
 
-            $publishParams = @{}
-            Add-FirstAvailableParam $publishParams $publishCommand @('bcAuthContext','authContext') $bcAuthContext | Out-Null
-            Add-FirstAvailableParam $publishParams $publishCommand @('environment','environmentName') $environmentName | Out-Null
+              Publish-PerTenantExtensionApp `
+                -bcAuthContext $authContext `
+                -environment $env:ENVIRONMENT `
+                -appFile $appFile `
+                -sync `
+                -install `
+                -schemaSyncMode Add `
+                -tenant default
 
-            if (-not (Add-FirstAvailableParam $publishParams $publishCommand @('appFiles') @($appPath))) {
-              Add-FirstAvailableParam $publishParams $publishCommand @('appFile') $appPath | Out-Null
-            }
-
-            Add-FirstAvailableParam $publishParams $publishCommand @('scope') 'Tenant' | Out-Null
-            Add-FirstAvailableParam $publishParams $publishCommand @('sync') $true | Out-Null
-            Add-FirstAvailableParam $publishParams $publishCommand @('install') $true | Out-Null
-            Add-FirstAvailableParam $publishParams $publishCommand @('schemaSyncMode') 'Add' | Out-Null
-            Add-FirstAvailableParam $publishParams $publishCommand @('tenant') 'default' | Out-Null
-
-            Write-Host "Using publish command: $($publishCommand.Name)"
-            Write-Host "Target environment: $environmentName"
-            & $publishCommand @publishParams
-            Write-Host "Publish completed for environment '$environmentName'."
+              Write-Host 'SUCCESS: App Published!'
           }
           catch {
-            Write-Host 'BC publish step failed with detailed error:'
-            $_ | Format-List * -Force | Out-String | Write-Host
-            if ($_.Exception -and $_.Exception.InnerException) {
-              $_.Exception.InnerException | Format-List * -Force | Out-String | Write-Host
-            }
-            throw
+              Write-Host 'ERROR DETAILS BELOW:'
+              $_ | Format-List * -Force
+              throw
           }
