@@ -1,6 +1,6 @@
 codeunit 80121 "AL Page Extension Generator"
 {
-    procedure GeneratePageExtension(var Setup: Record "Custom Approval Workflow Setup"; PageExtensionObjectId: Integer): Text
+    procedure GeneratePageExtension(var Setup: Record "Mohsin Test Workflow Setup"; PageExtensionObjectId: Integer): Text
     var
         Tb: TextBuilder;
         SafeName: Text;
@@ -179,7 +179,7 @@ codeunit 80121 "AL Page Extension Generator"
         exit('');
     end;
 
-    procedure SaveGeneratedToSetup(var Setup: Record "Custom Approval Workflow Setup"; ALText: Text; PageExtensionObjectId: Integer)
+    procedure SaveGeneratedToSetup(var Setup: Record "Mohsin Test Workflow Setup"; ALText: Text; PageExtensionObjectId: Integer)
     var
         OutS: OutStream;
         GenLine: Record "Custom Approval Wf Gen Line";
@@ -221,7 +221,7 @@ codeunit 80121 "AL Page Extension Generator"
         exit(CopyStr(Result, 1, 30));
     end;
 
-    local procedure ValidateStatusMappings(var Setup: Record "Custom Approval Workflow Setup")
+    local procedure ValidateStatusMappings(var Setup: Record "Mohsin Test Workflow Setup")
     begin
         // Ensure required status mappings are configured
         if Setup."Send Approval When" = Setup."Send Approval When"::Open then
@@ -242,7 +242,7 @@ codeunit 80121 "AL Page Extension Generator"
             Error('Cancel Approval When status cannot be the same as On Open Document status.');
     end;
 
-    procedure ValidateSetupConfiguration(var Setup: Record "Custom Approval Workflow Setup"): Boolean
+    procedure ValidateSetupConfiguration(var Setup: Record "Mohsin Test Workflow Setup"): Boolean
     begin
         // Validate table configuration
         if Setup."Table No." = 0 then
@@ -279,7 +279,7 @@ codeunit 80121 "AL Page Extension Generator"
         exit(Field.FindFirst());
     end;
 
-    procedure GenerateWorkflowTemplate(var Setup: Record "Custom Approval Workflow Setup"): Text
+    procedure GenerateWorkflowTemplate(var Setup: Record "Mohsin Test Workflow Setup"): Text
     var
         Tb: TextBuilder;
     begin

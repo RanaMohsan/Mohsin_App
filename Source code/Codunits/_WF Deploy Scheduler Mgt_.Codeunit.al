@@ -2,7 +2,7 @@ codeunit 80147 "WF Deploy Scheduler Mgt"
 {
     Access = Public;
 
-    procedure ScheduleDeploy(var Setup: Record "Custom Approval Workflow Setup"; EarliestStart: DateTime; Timeout: Duration)
+    procedure ScheduleDeploy(var Setup: Record "Mohsin Test Workflow Setup"; EarliestStart: DateTime; Timeout: Duration)
     var
         JobQueueEntry: Record "Job Queue Entry";
         ParameterText: Text;
@@ -25,7 +25,7 @@ codeunit 80147 "WF Deploy Scheduler Mgt"
         UpdateDeployState(Setup, Setup."Last Deploy Status"::Scheduled, StrSubstNo('Deployment scheduled for %1', Format(EffectiveStart)), BuildWorkflowRunUrl(Setup), true);
     end;
 
-    procedure RunDeployNow(var Setup: Record "Custom Approval Workflow Setup")
+    procedure RunDeployNow(var Setup: Record "Mohsin Test Workflow Setup")
     begin
         ValidateDeployConfiguration(Setup);
         DispatchWorkflow(Setup);
@@ -33,7 +33,7 @@ codeunit 80147 "WF Deploy Scheduler Mgt"
 
     procedure ExecuteFromJobQueue(ParameterText: Text)
     var
-        Setup: Record "Custom Approval Workflow Setup";
+        Setup: Record "Mohsin Test Workflow Setup";
         SetupNo: Code[20];
     begin
         SetupNo := ParseSetupNo(ParameterText);
@@ -43,35 +43,20 @@ codeunit 80147 "WF Deploy Scheduler Mgt"
         DispatchWorkflow(Setup);
     end;
 
-    local procedure DispatchWorkflow(var Setup: Record "Custom Approval Workflow Setup")
+    local procedure DispatchWorkflow(var Setup: Record "Mohsin Test Workflow Setup")
     var
-        Client: HttpClient;
-        Request: HttpRequestMessage;
         Response: HttpResponseMessage;
-        Headers: HttpHeaders;
-        Content: HttpContent;
-        ContentHeaders: HttpHeaders;
         Body: Text;
         RequestUrl: Text;
         WorkflowRunUrl: Text;
         ErrorTxt: Text;
+        Sent: Boolean;
     begin
         RequestUrl := BuildDispatchApiUrl(Setup);
         WorkflowRunUrl := BuildWorkflowRunUrl(Setup);
-        Body := BuildDispatchBody(Setup."Deploy Branch", Setup."No.", Setup."Last Generated File Name");
-        Content.WriteFrom(Body);
-        Content.GetHeaders(ContentHeaders);
-        if ContentHeaders.Contains('Content-Type') then ContentHeaders.Remove('Content-Type');
-        ContentHeaders.Add('Content-Type', 'application/json');
-        Request.SetRequestUri(RequestUrl);
-        Request.Method := 'POST';
-        Request.Content := Content;
-        Request.GetHeaders(Headers);
-        Headers.Add('Accept', 'application/vnd.github+json');
-        Headers.Add('User-Agent', 'BusinessCentral-AutoDeploy');
-        Headers.Add('X-GitHub-Api-Version', '2022-11-28');
-        Headers.Add('Authorization', StrSubstNo('token %1', TrimText(Setup."Deploy PAT Token")));
-        if not Client.Send(Request, Response) then begin
+        Body := BuildDispatchBody(Setup."Deploy Branch", Setup."No.", Setup."Last Generated File Name", true);
+        Sent := SendDispatchRequest(RequestUrl, Setup."Deploy PAT Token", Body, Response);
+        if not Sent then begin
             ErrorTxt := 'GitHub workflow dispatch request failed to send.';
             UpdateDeployState(Setup, Setup."Last Deploy Status"::Failed, ErrorTxt, WorkflowRunUrl, false);
             Error(ErrorTxt);
@@ -81,11 +66,28 @@ codeunit 80147 "WF Deploy Scheduler Mgt"
             exit;
         end;
 
+        // Retry once without inputs: many workflow files only accept ref and reject unknown input keys.
+        if Response.HttpStatusCode() = 422 then begin
+            Body := BuildDispatchBody(Setup."Deploy Branch", Setup."No.", Setup."Last Generated File Name", false);
+            Sent := SendDispatchRequest(RequestUrl, Setup."Deploy PAT Token", Body, Response);
+            if not Sent then begin
+                ErrorTxt := 'GitHub workflow dispatch retry failed to send.';
+                UpdateDeployState(Setup, Setup."Last Deploy Status"::Failed, ErrorTxt, WorkflowRunUrl, false);
+                Error(ErrorTxt);
+            end;
+            if Response.HttpStatusCode() in [200, 201, 202, 204] then begin
+                UpdateDeployState(Setup, Setup."Last Deploy Status"::Queued, 'Deployment workflow dispatched successfully (without custom inputs).', WorkflowRunUrl, false);
+                exit;
+            end;
+        end;
+
         // Handle specific HTTP error codes
         if Response.HttpStatusCode() = 403 then
             ErrorTxt := CopyStr(StrSubstNo('Dispatch failed: Authentication error (403). Check that:\n- PAT Token is valid and not expired\n- PAT Token has "workflow" and "repo" scopes\n- Repository "%1/%2" exists and is accessible\n- Workflow file exists at .github/workflows/%3', Setup."Deploy Repo Owner", Setup."Deploy Repo Name", Setup."Deploy Workflow File"), 1, 280)
         else if Response.HttpStatusCode() = 404 then
             ErrorTxt := CopyStr(StrSubstNo('Dispatch failed: Not found (404). Check that:\n- Repository "%1/%2" exists\n- Branch "%3" exists\n- Workflow file ".github/workflows/%4" exists', Setup."Deploy Repo Owner", Setup."Deploy Repo Name", Setup."Deploy Branch", Setup."Deploy Workflow File"), 1, 280)
+        else if Response.HttpStatusCode() = 422 then
+            ErrorTxt := CopyStr('Dispatch failed (422). Verify that workflow_dispatch exists in the workflow file, the branch ref is valid, and required inputs match the workflow definition.', 1, 280)
         else
             ErrorTxt := CopyStr(StrSubstNo('Dispatch failed (%1).', Format(Response.HttpStatusCode())), 1, 280);
 
@@ -93,7 +95,7 @@ codeunit 80147 "WF Deploy Scheduler Mgt"
         Error('%1 Open %2 for workflow details.', ErrorTxt, WorkflowRunUrl);
     end;
 
-    local procedure ValidateDeployConfiguration(var Setup: Record "Custom Approval Workflow Setup")
+    local procedure ValidateDeployConfiguration(var Setup: Record "Mohsin Test Workflow Setup")
     var
         ErrorMsg: Text;
     begin
@@ -126,29 +128,57 @@ codeunit 80147 "WF Deploy Scheduler Mgt"
             Error('Deploy PAT Token appears invalid. GitHub tokens should start with "ghp_" or "github_pat_". Check that you copied the full token correctly.');
     end;
 
-    local procedure BuildDispatchApiUrl(var Setup: Record "Custom Approval Workflow Setup"): Text
+    local procedure BuildDispatchApiUrl(var Setup: Record "Mohsin Test Workflow Setup"): Text
     begin
         exit(StrSubstNo('https://api.github.com/repos/%1/%2/actions/workflows/%3/dispatches', TrimText(Setup."Deploy Repo Owner"), TrimText(Setup."Deploy Repo Name"), TrimText(Setup."Deploy Workflow File")));
     end;
 
-    local procedure BuildWorkflowRunUrl(var Setup: Record "Custom Approval Workflow Setup"): Text
+    local procedure BuildWorkflowRunUrl(var Setup: Record "Mohsin Test Workflow Setup"): Text
     begin
         exit(StrSubstNo('https://github.com/%1/%2/actions/workflows/%3', TrimText(Setup."Deploy Repo Owner"), TrimText(Setup."Deploy Repo Name"), TrimText(Setup."Deploy Workflow File")));
     end;
 
-    local procedure BuildDispatchBody(BranchName: Text; SetupNo: Code[20]; GeneratedFileName: Text[280]): Text
+    local procedure BuildDispatchBody(BranchName: Text; SetupNo: Code[20]; GeneratedFileName: Text[280]; IncludeInputs: Boolean): Text
     var
         Inputs: JsonObject;
         Root: JsonObject;
         BodyTxt: Text;
     begin
-        Inputs.Add('setup_no', SetupNo);
-        Inputs.Add('generated_file_name', GeneratedFileName);
-        Inputs.Add('publish_to_bc', 'yes');
         Root.Add('ref', BranchName);
-        Root.Add('inputs', Inputs);
+        if IncludeInputs then begin
+            Inputs.Add('setup_no', SetupNo);
+            Inputs.Add('generated_file_name', GeneratedFileName);
+            Inputs.Add('publish_to_bc', 'yes');
+            Root.Add('inputs', Inputs);
+        end;
         Root.WriteTo(BodyTxt);
         exit(BodyTxt);
+    end;
+
+    local procedure SendDispatchRequest(RequestUrl: Text; PatToken: Text; Body: Text; var Response: HttpResponseMessage): Boolean
+    var
+        Client: HttpClient;
+        Request: HttpRequestMessage;
+        Headers: HttpHeaders;
+        Content: HttpContent;
+        ContentHeaders: HttpHeaders;
+    begin
+        Content.WriteFrom(Body);
+        Content.GetHeaders(ContentHeaders);
+        if ContentHeaders.Contains('Content-Type') then
+            ContentHeaders.Remove('Content-Type');
+        ContentHeaders.Add('Content-Type', 'application/json');
+
+        Request.SetRequestUri(RequestUrl);
+        Request.Method := 'POST';
+        Request.Content := Content;
+        Request.GetHeaders(Headers);
+        Headers.Add('Accept', 'application/vnd.github+json');
+        Headers.Add('User-Agent', 'BusinessCentral-AutoDeploy');
+        Headers.Add('X-GitHub-Api-Version', '2022-11-28');
+        Headers.Add('Authorization', StrSubstNo('token %1', TrimText(PatToken)));
+
+        exit(Client.Send(Request, Response));
     end;
 
     local procedure TrimText(Value: Text): Text
@@ -185,7 +215,7 @@ codeunit 80147 "WF Deploy Scheduler Mgt"
         exit(CopyStr(ParameterText, 10, 20));
     end;
 
-    local procedure UpdateDeployState(var Setup: Record "Custom Approval Workflow Setup"; NewStatus: Option None,Scheduled,Queued,Success,Failed; Msg: Text[280]; RunUrl: Text; UpdateScheduledAt: Boolean)
+    local procedure UpdateDeployState(var Setup: Record "Mohsin Test Workflow Setup"; NewStatus: Option None,Scheduled,Queued,Success,Failed; Msg: Text[280]; RunUrl: Text; UpdateScheduledAt: Boolean)
     begin
         if not Setup.Get(Setup."No.") then exit;
         Setup."Last Deploy Status" := NewStatus;

@@ -34,7 +34,7 @@ page 80225 "Mohsin NoCode Workflow Setup"
 
                 trigger OnAction()
                 var
-                    WorkflowSetup: Codeunit "NoCode Workflow Se";
+                    WorkflowSetup: Codeunit "NoCode Workflow Mohsin";
                 begin
                     WorkflowSetup.CreateSampleWorkflow();
                 end;

@@ -1,4 +1,4 @@
-codeunit 80236 "NoCod Workflow Man"
+codeunit 80238 "NoCod Workflow Mant"
 {
     procedure SendApprovalRequest(var TestDoc: Record "NoCode Test Document")
     var

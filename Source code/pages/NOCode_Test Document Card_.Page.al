@@ -47,7 +47,7 @@ page 80224 "Mohsin NoCode Test Doc Card"
 
                 trigger OnAction()
                 var
-                    WorkflowMgt: Codeunit "NoCod Workflow Man";
+                    WorkflowMgt: Codeunit "NoCod Workflow Mant";
                 begin
                     WorkflowMgt.SendApprovalRequest(Rec);
                 end;
@@ -61,7 +61,7 @@ page 80224 "Mohsin NoCode Test Doc Card"
 
                 trigger OnAction()
                 var
-                    WorkflowMgt: Codeunit "NoCod Workflow Man";
+                    WorkflowMgt: Codeunit "NoCod Workflow Mant";
                 begin
                     WorkflowMgt.Approve(Rec);
                 end;
@@ -75,7 +75,7 @@ page 80224 "Mohsin NoCode Test Doc Card"
 
                 trigger OnAction()
                 var
-                    WorkflowMgt: Codeunit "NoCod Workflow Man";
+                    WorkflowMgt: Codeunit "NoCod Workflow Mant";
                 begin
                     WorkflowMgt.Reject(Rec);
                 end;
@@ -89,7 +89,7 @@ page 80224 "Mohsin NoCode Test Doc Card"
 
                 trigger OnAction()
                 var
-                    WorkflowMgt: Codeunit "NoCod Workflow Man";
+                    WorkflowMgt: Codeunit "NoCod Workflow Mant";
                 begin
                     WorkflowMgt.Cancel(Rec);
                 end;
@@ -102,7 +102,7 @@ page 80224 "Mohsin NoCode Test Doc Card"
 
     trigger OnAfterGetRecord()
     var
-        WorkflowMgt: Codeunit "NoCod Workflow Man";
+        WorkflowMgt: Codeunit "NoCod Workflow Mant";
     begin
         IsApprover := WorkflowMgt.IsCurrentUserApprover(Rec);
     end;

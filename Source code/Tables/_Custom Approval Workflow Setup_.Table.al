@@ -1,9 +1,9 @@
-table 80102 "Custom Approval Workflow Setup"
+table 80102 "Mohsin Test Workflow Setup"
 {
     Caption = 'Custom Approval Workflow Setup';
     DataClassification = CustomerContent;
-    LookupPageId = "Custom Approval Workflow List";
-    DrillDownPageId = "Custom Approval Workflow";
+    LookupPageId = "Mohsin Workflow List";
+    DrillDownPageId = "MohsinTest Workflow";
 
     fields
     {

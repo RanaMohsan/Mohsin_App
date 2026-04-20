@@ -1,4 +1,4 @@
-table 80201 "NoCode Workflow Step"
+table 80149 "NoCode Workflow Step"
 {
     Caption = 'NoCode Workflow Step';
     DataClassification = CustomerContent;

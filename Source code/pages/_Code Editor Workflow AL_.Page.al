@@ -150,13 +150,13 @@ page 80114 "Code Editor Workflow AL"
         }
     }
     var
-        SetupGlobal: Record "Custom Approval Workflow Setup";
+        SetupGlobal: Record "Mohsin Test Workflow Setup";
         PreviewTxt: Text;
         FileNameDisplay: Text[280];
         CharCount: Integer;
         NextPageExtObjectId: Integer;
 
-    procedure SetSetup(var SetupIn: Record "Custom Approval Workflow Setup")
+    procedure SetSetup(var SetupIn: Record "Mohsin Test Workflow Setup")
     begin
         SetupGlobal := SetupIn;
         NextPageExtObjectId := 80140;
@@ -169,7 +169,7 @@ page 80114 "Code Editor Workflow AL"
 
     local procedure LoadPreview()
     var
-        FullText: Text;
+        FullTextMohsinTest: Text;
     begin
         Clear(PreviewTxt);
         Clear(FileNameDisplay);
@@ -185,12 +185,12 @@ page 80114 "Code Editor Workflow AL"
             PreviewTxt := '// No generated AL yet. Use Generate Card Page on Custom Approval Workflow.';
             exit;
         end;
-        FullText := ReadGeneratedAlTextFromSetup(SetupGlobal);
-        CharCount := StrLen(FullText);
-        PreviewTxt := FullText;
+        FullTextMohsinTest := ReadGeneratedAlTextFromSetup(SetupGlobal);
+        CharCount := StrLen(FullTextMohsinTest);
+        PreviewTxt := FullTextMohsinTest;
     end;
 
-    local procedure ReadGeneratedAlTextFromSetup(var SetupRec: Record "Custom Approval Workflow Setup"): Text
+    local procedure ReadGeneratedAlTextFromSetup(var SetupRec: Record "Mohsin Test Workflow Setup"): Text
     var
         InS: InStream;
         Line: Text;

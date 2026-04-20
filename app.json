@@ -1,8 +1,8 @@
 {
   "id": "95b666c9-caab-422e-bbdd-551a8a7f9ba6",
-  "name": "Workflow Template Builder",
-  "publisher": "Mohsin TMRC",
-  "version": "1.0.0.32",
+  "name": "Transfer Order workflow",
+  "publisher": "Mohsin",
+  "version": "1.0.0.37",
   "brief": "",
   "description": "",
   "privacyStatement": "",
@@ -17,12 +17,9 @@
   "idRanges": [
    {
       "from": 80100,
-      "to": 80149
-    },
-    {
-      "from": 80200,
-      "to": 80299
+      "to": 90149
     }
+   
   ],
   "resourceExposurePolicy": {
     "allowDebugging": false,

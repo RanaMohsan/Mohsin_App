@@ -76,7 +76,7 @@ codeunit 80120 "Custom Approval Workflow Mgt."
 
     procedure SendApprovalRequest(var RecRef: RecordRef)
     var
-        Setup: Record "Custom Approval Workflow Setup";
+        Setup: Record "Mohsin Test Workflow Setup";
         WorkflowManagement: Codeunit "Workflow Management";
         StatusFieldRef: FieldRef;
         CurrentStatus: Enum "WFDemo Status";
@@ -120,7 +120,7 @@ codeunit 80120 "Custom Approval Workflow Mgt."
 
     procedure CancelApprovalRequest(var RecRef: RecordRef)
     var
-        Setup: Record "Custom Approval Workflow Setup";
+        Setup: Record "Mohsin Test Workflow Setup";
         WorkflowManagement: Codeunit "Workflow Management";
         StatusFieldRef: FieldRef;
         CurrentStatus: Enum "WFDemo Status";
@@ -154,7 +154,7 @@ codeunit 80120 "Custom Approval Workflow Mgt."
 
     procedure ApproveRecord(var RecRef: RecordRef)
     var
-        Setup: Record "Custom Approval Workflow Setup";
+        Setup: Record "Mohsin Test Workflow Setup";
         ApprovalEntry: Record "Approval Entry";
         StatusFieldRef: FieldRef;
     begin
@@ -191,7 +191,7 @@ codeunit 80120 "Custom Approval Workflow Mgt."
 
     procedure RejectRecord(var RecRef: RecordRef)
     var
-        Setup: Record "Custom Approval Workflow Setup";
+        Setup: Record "Mohsin Test Workflow Setup";
         ApprovalEntry: Record "Approval Entry";
         StatusFieldRef: FieldRef;
     begin
@@ -226,7 +226,7 @@ codeunit 80120 "Custom Approval Workflow Mgt."
         Message('Record rejected in table %1.', RecRef.Number);
     end;
 
-    procedure OpenCodeEditor(var Setup: Record "Custom Approval Workflow Setup")
+    procedure OpenCodeEditor(var Setup: Record "Mohsin Test Workflow Setup")
     var
         CodeEditor: Page "Code Editor Workflow AL";
     begin
@@ -235,7 +235,7 @@ codeunit 80120 "Custom Approval Workflow Mgt."
         CodeEditor.RunModal();
     end;
 
-    procedure OpenAutoDeploy(var Setup: Record "Custom Approval Workflow Setup")
+    procedure OpenAutoDeploy(var Setup: Record "Mohsin Test Workflow Setup")
     var
         Deploy: Page "Auto Deploy Scheduler";
     begin

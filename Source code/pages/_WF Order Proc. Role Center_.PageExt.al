@@ -21,7 +21,7 @@ pageextension 80143 "WF Order Proc. Role Center" extends "Order Processor Role C
                     ApplicationArea = All;
                     Caption = 'Custom Approval Workflow';
                     Image = WorkflowSetup;
-                    RunObject = page "Custom Approval Workflow List";
+                    RunObject = page "Mohsin Workflow List";
                     ToolTip = 'Open Custom Approval Workflow setups.';
                 }
                 action(Workflows)

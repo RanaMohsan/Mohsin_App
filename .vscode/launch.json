@@ -15,6 +15,7 @@
         //     "enableSqlInformationDebugger": true,
         //     "schemaUpdateMode": "ForceSync"
         // },
+        
           {
             "name": "Payroll-Mohsin",
             "request": "launch",

@@ -1,11 +1,11 @@
-page 80119 "Custom Approval Workflow List"
+page 80119 "Mohsin Workflow List"
 {
     ApplicationArea = All;
-    Caption = 'Custom Approval Workflow';
+    Caption = 'Mohsin Workflow List';
     PageType = List;
-    SourceTable = "Custom Approval Workflow Setup";
+    SourceTable = "Mohsin Test Workflow Setup";
     UsageCategory = Lists;
-    CardPageId = "Custom Approval Workflow";
+    CardPageId = "MohsinTest Workflow";
 
     layout
     {

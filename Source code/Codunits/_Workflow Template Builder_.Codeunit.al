@@ -1,6 +1,6 @@
 codeunit 80122 "Workflow Template Builder"
 {
-    procedure CreateOrUpdateFromSetup(var Setup: Record "Custom Approval Workflow Setup")
+    procedure CreateOrUpdateFromSetup(var Setup: Record "Mohsin Test Workflow Setup")
     var
         WorkflowCategory: Record "Workflow Category";
         Workflow: Record Workflow;

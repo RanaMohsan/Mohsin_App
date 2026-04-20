@@ -8,7 +8,7 @@ table 80103 "Custom Approval Wf Gen Line"
         field(1; "Setup No."; Code[20])
         {
             Caption = 'Setup No.';
-            TableRelation = "Custom Approval Workflow Setup"."No.";
+            TableRelation = "Mohsin Test Workflow Setup"."No.";
         }
         field(2; "Line No."; Integer)
         {

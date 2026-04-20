@@ -114,16 +114,16 @@ page 80115 "Auto Deploy Scheduler"
     }
 
     var
-        SetupGlobal: Record "Custom Approval Workflow Setup";
+        SetupGlobal: Record "Mohsin Test Workflow Setup";
         SchedulerMgt: Codeunit "WF Deploy Scheduler Mgt";
         ExtensionFileName: Text[280];
         InstantDeploy: Boolean;
         EarliestStart: DateTime;
         JobTimeout: Duration;
 
-    procedure SetSetup(var SetupIn: Record "Custom Approval Workflow Setup")
+    procedure SetSetup(var SetupIn: Record "Mohsin Test Workflow Setup")
     var
-        ConfigCheck: Text;
+        ConfigCheckMohsinTest: Text;
     begin
         SetupGlobal := SetupIn;
         InstantDeploy := true;
@@ -135,16 +135,16 @@ page 80115 "Auto Deploy Scheduler"
         JobTimeout := 30 * 60 * 1000;
 
         // Check for missing configuration upfront
-        ConfigCheck := '';
-        if SetupIn."Deploy Repo Owner" = '' then ConfigCheck := ConfigCheck + '\- Deploy Repo Owner\n';
-        if SetupIn."Deploy Repo Name" = '' then ConfigCheck := ConfigCheck + '\- Deploy Repo Name\n';
-        if SetupIn."Deploy Branch" = '' then ConfigCheck := ConfigCheck + '\- Deploy Branch\n';
-        if SetupIn."Deploy Workflow File" = '' then ConfigCheck := ConfigCheck + '\- Deploy Workflow File\n';
-        if SetupIn."Deploy PAT Token" = '' then ConfigCheck := ConfigCheck + '\- Deploy PAT Token\n';
-        if SetupIn."Last Generated File Name" = '' then ConfigCheck := ConfigCheck + '\- Generated AL File (run Generate Code first)\n';
+        ConfigCheckMohsinTest := '';
+        if SetupIn."Deploy Repo Owner" = '' then ConfigCheckMohsinTest := ConfigCheckMohsinTest + '\- Deploy Repo Owner\n';
+        if SetupIn."Deploy Repo Name" = '' then ConfigCheckMohsinTest := ConfigCheckMohsinTest + '\- Deploy Repo Name\n';
+        if SetupIn."Deploy Branch" = '' then ConfigCheckMohsinTest := ConfigCheckMohsinTest + '\- Deploy Branch\n';
+        if SetupIn."Deploy Workflow File" = '' then ConfigCheckMohsinTest := ConfigCheckMohsinTest + '\- Deploy Workflow File\n';
+        if SetupIn."Deploy PAT Token" = '' then ConfigCheckMohsinTest := ConfigCheckMohsinTest + '\- Deploy PAT Token\n';
+        if SetupIn."Last Generated File Name" = '' then ConfigCheckMohsinTest := ConfigCheckMohsinTest + '\- Generated AL File (run Generate Code first)\n';
 
-        if ConfigCheck <> '' then
-            Message('Missing deployment configuration:\n%1\nPlease configure these fields on the Custom Approval Workflow setup before deploying.', ConfigCheck);
+        if ConfigCheckMohsinTest <> '' then
+            Message('Missing deployment configuration:\n%1\nPlease configure these fields on the Custom Approval Workflow setup before deploying.', ConfigCheckMohsinTest);
     end;
 
     trigger OnQueryClosePage(CloseAction: Action): Boolean
@@ -155,13 +155,14 @@ page 80115 "Auto Deploy Scheduler"
                 RunInstantDeployFlow()
             else
                 RunScheduleDeployInfo();
+            exit(false); // Keep the deployment dialog open so user can review the result
         end;
-        exit(true); // Allow page to close
+        exit(true);
     end;
 
     local procedure ValidateDeployPrerequisites()
     var
-        FreshSetup: Record "Custom Approval Workflow Setup";
+        FreshSetup: Record "Mohsin Test Workflow Setup";
     begin
         // Refresh setup from database
         if not FreshSetup.Get(SetupGlobal."No.") then
@@ -193,7 +194,7 @@ page 80115 "Auto Deploy Scheduler"
 
     local procedure RunInstantDeployFlow()
     var
-        FreshSetup: Record "Custom Approval Workflow Setup";
+        FreshSetup: Record "Mohsin Test Workflow Setup";
     begin
         // Refresh setup from database to ensure latest data
         if not FreshSetup.Get(SetupGlobal."No.") then
@@ -202,11 +203,12 @@ page 80115 "Auto Deploy Scheduler"
         // Attempt deployment
         SchedulerMgt.RunDeployNow(FreshSetup);
         Message('Deployment workflow queued successfully. Open the run page from Custom Approval Workflow to monitor progress.');
+        OpenDeployStatusPage(FreshSetup);
     end;
 
     local procedure RunScheduleDeployInfo()
     var
-        FreshSetup: Record "Custom Approval Workflow Setup";
+        FreshSetup: Record "Mohsin Test Workflow Setup";
     begin
         // Refresh setup from database to ensure latest data
         if not FreshSetup.Get(SetupGlobal."No.") then
@@ -215,5 +217,15 @@ page 80115 "Auto Deploy Scheduler"
         // Schedule deployment
         SchedulerMgt.ScheduleDeploy(FreshSetup, EarliestStart, JobTimeout);
         Message('Deployment scheduled successfully.');
+        OpenDeployStatusPage(FreshSetup);
+    end;
+
+    local procedure OpenDeployStatusPage(var SetupRec: Record "Mohsin Test Workflow Setup")
+    var
+        DeployStatus: Page "Deploy Status Detail";
+    begin
+        Commit();
+        DeployStatus.SetSetupNo(SetupRec."No.");
+        DeployStatus.RunModal();
     end;
 }

@@ -1,9 +1,9 @@
-page 80112 "Custom Approval Workflow"
+page 80112 "MohsinTest Workflow"
 {
     ApplicationArea = All;
     Caption = 'Custom Approval Workflow';
     PageType = Card;
-    SourceTable = "Custom Approval Workflow Setup";
+    SourceTable = "Mohsin Test Workflow Setup";
     UsageCategory = Administration;
 
     layout
